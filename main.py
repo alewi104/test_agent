@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from tools import read_file, get_project_structure, write_test_file, run_pytest
+from pathlib import Path
 
 load_dotenv()
 
@@ -31,5 +32,13 @@ agent = create_agent(
     response_format=ToolStrategy(TestResponse)
 )
 
-raw_response = agent.invoke({"messages": [{"role": "user", "content": "Generate Playwright tests for https://alewi104.github.io/pico-folio/." r"The project structure is at 'C:\Users\Ahlaireah\Documents\Documents\Personal Projects\PortfolioSite\Pico-8-Portfolio-Site'"}]})
+path_input = input(" Provide the path to the project's directory: ")
+target_url = input(" Provide the target URL")
+
+project_path = Path(path_input)
+if not project_path.exists():
+    print(f"Warning: {project_path} does not exist.")
+
+
+raw_response = agent.invoke({"messages": [{"role": "user", "content": f"Generate Playwright tests for {target_url}. The project structure is at {project_path}"}]})
 print(raw_response["structured_response"])
