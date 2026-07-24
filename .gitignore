@@ -430,3 +430,5 @@ FodyWeavers.xsd
 
 # Virtual Environment
 /venv
+
+/tests_output
