@@ -1,10 +1,10 @@
-# DocMaster
+# test_agent
 
 An agentic tool that reads a target project's source files and generates [Playwright](https://playwright.dev/) end-to-end tests for it. Point it at a project directory and a live URL, and the agent explores the codebase, writes test files, runs them, and iterates on failures.
 
 ## How it works
 
-DocMaster uses a [LangChain](https://www.langchain.com/) tool-calling agent (built on `create_agent`) backed by `gpt-5.4-mini`. Given a project path and a target URL, the agent:
+test_agent uses a [LangChain](https://www.langchain.com/) tool-calling agent (built on `create_agent`) backed by `gpt-5.4-mini`. Given a project path and a target URL, the agent:
 
 1. Explores the target project's directory structure
 2. Reads relevant source files to understand what's testable
@@ -30,7 +30,7 @@ Generated tests are written locally to `tests_output/` — the agent never modif
 
 ```bash
 git clone <your-repo-url>
-cd DocMaster
+cd test_agent
 python -m venv venv
 venv\Scripts\activate      # Windows
 source venv/bin/activate   # macOS/Linux
@@ -58,7 +58,7 @@ You'll be prompted for:
 - **Project directory path** — the local path to the project you want tests generated for
 - **Target URL** — the live URL of the running application, used for `page.goto(...)` calls in generated tests
 
-Generated test files land in `tests_output/` in the DocMaster directory. From there, run them directly:
+Generated test files land in `tests_output/` in the test_agent directory. From there, run them directly:
 
 ```bash
 pytest tests_output/ -v
@@ -92,3 +92,4 @@ test_agent/
 - This project is under active development — tool coverage and agent reliability will continue to expand.
 
 ## License
+This project is open source and available under the [MIT License](LICENSE).
