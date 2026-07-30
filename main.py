@@ -41,20 +41,18 @@ SYSTEM_PROMPT = """
 
             Do not write more than one test file unless the project clearly has multiple
             distinct, unrelated features that each need their own file.
-            
+
             You have a strict budget: at most 3 file writes and 3 test runs total.  
             """
 
 structure_limiter = ToolCallLimitMiddleware(tool_name="get_project_structure", run_limit=1, exit_behavior="end")
-read_limiter = ToolCallLimitMiddleware(tool_name="read_file", run_limit=3, exit_behavior="continue")
-write_limiter = ToolCallLimitMiddleware(tool_name="write_test_file", run_limit=3, exit_behavior="continue")
-pytest_limiter = ToolCallLimitMiddleware(tool_name="run_pytest", run_limit=3, exit_behavior="continue")
+global_limiter = ToolCallLimitMiddleware(run_limit=12, exit_behavior="continue")
 
 agent = create_agent(
     model=llm, 
     system_prompt=SYSTEM_PROMPT,
     tools=[read_file, get_project_structure, write_test_file, run_pytest],
-    middleware=[structure_limiter, read_limiter, write_limiter, pytest_limiter], 
+    middleware=[structure_limiter, global_limiter], 
     response_format=ToolStrategy(TestResponse)
 )
 
@@ -68,7 +66,7 @@ if not project_path.exists():
 
 for chunk in agent.stream(
     {"messages": [{"role": "user", "content": f"Generate Playwright tests for {target_url}. The project structure is at {project_path}"}]},
-    config={"recursion_limit": 35},
+    config={"recursion_limit": 60},
     stream_mode="values",
 ):
     chunk["messages"][-1].pretty_print()
