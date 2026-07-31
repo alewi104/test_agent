@@ -9,12 +9,13 @@ TEST_OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 @tool
-def read_file(path: str) -> str:
-    """Read and return the contents of a file at the given path."""
+def read_file(path: str, project_root:str) -> str:
+    """Read and return the contents of a file at the given path, relative to project_root."""
     try:
-        return Path(path).read_text(encoding="utf-8")
+        full_path = Path(project_root) / path
+        return full_path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return f"Error: file not found at {path}"
+        return f"Error: file not found at {full_path}"
     except Exception as e:
         return f"Error reading file: {e}"
 
@@ -22,7 +23,7 @@ def read_file(path: str) -> str:
 @tool
 def get_project_structure(path: str, max_depth: int = 3) -> str:
     """Return a tree-like listing of the project's directory structure, skipping common noise directories like node_modules and .git."""
-    ignore = {"node_modules", ".git", "__pycache__", "venv", ".venv"}
+    ignore = {"node_modules", ".git", "__pycache__", "venv", ".venv", ".github", "public", "dist", "README.md"}
     root = Path(path)
     lines = []
 
@@ -34,8 +35,13 @@ def get_project_structure(path: str, max_depth: int = 3) -> str:
         except PermissionError:
             return
         for entry in entries:
-            if entry.name in ignore:
+            rel = entry.relative_to(root)
+            if (
+                entry.name in ignore
+                or rel == Path("src/assets")
+            ):
                 continue
+
             lines.append(f"{prefix}{entry.name}")
             if entry.is_dir():
                 walk(entry, depth + 1, prefix + "  ")
@@ -46,7 +52,10 @@ def get_project_structure(path: str, max_depth: int = 3) -> str:
 
 @tool
 def write_test_file(filename: str, content: str, overwrite: bool = False) -> str:
-    """Write a Playwright test file into the sandboxed tests_output directory. Fails if the file already exists unless overwrite is True."""
+    """Write a Python pytest-Playwright test file (filename must end in .py) into the sandboxed tests_output directory. Fails if the file already exists unless overwrite is True."""
+    if not filename.endswith(".py"):
+        return "Error: filename must end in .py — tests must be Python (pytest-playwright), not JavaScript."
+    
     target = (TEST_OUTPUT_DIR / filename).resolve()
 
     # keep writes inside TEST_OUTPUT_DIR
@@ -62,9 +71,9 @@ def write_test_file(filename: str, content: str, overwrite: bool = False) -> str
 
 
 @tool
-def run_pytest(path: str, timeout: int = 60) -> str:
+def run_pytest(filename: str, timeout: int = 60) -> str:
     """Run a Playwright test file via pytest and return pass/fail output, including any error details."""
-    target = (TEST_OUTPUT_DIR / path).resolve()
+    target = (TEST_OUTPUT_DIR / filename).resolve()
     if TEST_OUTPUT_DIR not in target.parents and target != TEST_OUTPUT_DIR:
         return "Error: path escapes the sandboxed output directory."
 
