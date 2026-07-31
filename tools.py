@@ -23,7 +23,7 @@ def read_file(path: str, project_root:str) -> str:
 @tool
 def get_project_structure(path: str, max_depth: int = 3) -> str:
     """Return a tree-like listing of the project's directory structure, skipping common noise directories like node_modules and .git."""
-    ignore = {"node_modules", ".git", "__pycache__", "venv", ".venv", ".github", "public", "dist"}
+    ignore = {"node_modules", ".git", "__pycache__", "venv", ".venv", ".github", "public", "dist", "README.md"}
     root = Path(path)
     lines = []
 
@@ -35,8 +35,13 @@ def get_project_structure(path: str, max_depth: int = 3) -> str:
         except PermissionError:
             return
         for entry in entries:
-            if entry.name in ignore:
+            rel = entry.relative_to(root)
+            if (
+                entry.name in ignore
+                or rel == Path("src/assets")
+            ):
                 continue
+
             lines.append(f"{prefix}{entry.name}")
             if entry.is_dir():
                 walk(entry, depth + 1, prefix + "  ")

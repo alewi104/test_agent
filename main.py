@@ -8,18 +8,24 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain.agents.structured_output import ToolStrategy
+from langchain_core.messages import HumanMessage
 from tools import read_file, get_project_structure, write_test_file, run_pytest
 from pathlib import Path
 import sys
 
 load_dotenv()
 
-class TestResponse(BaseModel):
-    path: str = Field(description="Relative path where the test file should be written")
-    content: str = Field(description="Full contents of the Playwright test file")
-    overwrite: bool = Field(description="Whether to overwrite an existing file")
+class DependencyList(BaseModel):
+    files: list[str] = Field(description="Relative project files needed to understand this page.")
 
-llm = ChatOpenAI(model = "gpt-5.4-mini")
+class PlaywrightTest(BaseModel):
+    filename:str
+    content:str
+
+llm = ChatOpenAI(model = "gpt-5.4-mini", temperature=0)
+
+structure_limiter = ToolCallLimitMiddleware(tool_name="get_project_structure", run_limit=1, exit_behavior="end")
+global_limiter = ToolCallLimitMiddleware(run_limit=12, exit_behavior="continue")
 
 SYSTEM_PROMPT = """
             You are a QA engineer generating Playwright tests for a web application.
@@ -31,42 +37,53 @@ SYSTEM_PROMPT = """
             - Import via: `from playwright.sync_api import Page, expect`
             - Do NOT use `import { test, expect } from '@playwright/test'` — that is JavaScript syntax and will not run.
 
-            Follow this exact sequence:
-            1. Call get_project_structure once to understand the project.
-            2. Call read_file on only the files relevant to testable user flows.
-            3. Write ONE test file covering the main flows using write_test_file.
-            4. Call run_pytest on that file.
-            5. If it fails, fix the SAME file (overwrite=True) — do not create new files.
-            6. Repeat steps 4-5 at most twice more, then stop regardless of outcome and report status.
+            Rules:
+            - Never call the same tool twice with identical arguments.
+            - Reuse previous tool results instead of calling the tool again.
+            - Only rerun pytest after modifying the test file.
+            - Never rerun pytest if the file has not changed.
+            - If a tool has already produced the needed information, continue reasoning without another call.
 
             Do not write more than one test file unless the project clearly has multiple
             distinct, unrelated features that each need their own file.
-
-            You have a strict budget: at most 3 file writes and 3 test runs total.  
+  
             """
 
-structure_limiter = ToolCallLimitMiddleware(tool_name="get_project_structure", run_limit=1, exit_behavior="end")
-global_limiter = ToolCallLimitMiddleware(run_limit=12, exit_behavior="continue")
+page = Path(input( "What page would you like to make tests for?: ").strip().strip('"'))
+project_path = Path(input(" Provide the path to the project's directory: ").strip().strip('"'))
+target_url = input(" Provide the target URL").strip()
+
+if not project_path.exists():
+    print(f"Warning: {project_path} does not exist.")
+    sys.exit()
+
+structure = get_project_structure.invoke({"path": str(project_path)})
+response = llm.with_structured_output(DependencyList).invoke([HumanMessage(content=f"""
+        Project structure: {structure}. Target page: {page}. 
+        Return ONLY the project files required to understand the user-facing behavior of this page. 
+        Include the page itself.
+        """)])
+files = response.files
+
+source = []
+for file in files:
+    text = read_file.invoke({"path": file, "project_root": str(project_path)})
+    source.append(f"FILE: {file}  {text}")
+project_context = "\n\n".join(source)
+
+
 
 agent = create_agent(
     model=llm, 
     system_prompt=SYSTEM_PROMPT,
     tools=[read_file, get_project_structure, write_test_file, run_pytest],
-    middleware=[structure_limiter, global_limiter], 
-    response_format=ToolStrategy(TestResponse)
+    middleware=[structure_limiter, global_limiter] 
+    # response_format=ToolStrategy(TestResponse)
 )
-
-path_input = input(" Provide the path to the project's directory: ")
-target_url = input(" Provide the target URL")
-
-project_path = Path(path_input)
-if not project_path.exists():
-    print(f"Warning: {project_path} does not exist.")
-    sys.exit()
 
 for chunk in agent.stream(
     {"messages": [{"role": "user", "content": f"Generate Playwright tests for {target_url}. The project structure is at {project_path}"}]},
-    config={"recursion_limit": 60},
+    config={"recursion_limit": 15},
     stream_mode="values",
 ):
     chunk["messages"][-1].pretty_print()
