@@ -68,6 +68,7 @@ for attempt in range(MAX_ATTEMPTS):
         print("Success!")
         break
 
+    print("Test Failed. Retrying...")
     fix = llm.with_structured_output(PlaywrightTest).invoke([HumanMessage(content=f"""
         The following Playwright test failed. Current test: {current_content}. Pytest output: {result}
         Return the corrected test. Keep the same filename.
