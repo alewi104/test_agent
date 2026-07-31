@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 
 load_dotenv()
-MAX_ITERATIONS = 8
+MAX_ITERATIONS = 10
 
 class DependencyList(BaseModel):
     files: list[str] = Field(description="Relative project files needed to understand this page.")
